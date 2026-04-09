@@ -1,0 +1,164 @@
+/* ─── Container ─────────────────────────────────────────────────────────────── */
+
+.image-event {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.image-event--card {
+  background: var(--background-default-intense);
+  border: 1px solid var(--border-gray-default);
+  border-radius: var(--global-border-radius-large);
+  padding: var(--spacing-04);
+}
+
+/* ─── Loading overlay ────────────────────────────────────────────────────────── */
+
+.image-event__loading-overlay {
+  position: absolute;
+  top: var(--spacing-03);
+  right: var(--spacing-03);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ─── Image wrap ─────────────────────────────────────────────────────────────── */
+
+.image-event__image-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.image-event__img {
+  display: block;
+  max-width: 100%;
+}
+
+/* ─── Event badges ───────────────────────────────────────────────────────────── */
+
+.image-event__badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-02);
+  padding: var(--spacing-02) var(--spacing-03);
+  border-radius: var(--global-border-radius-max);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--fds-shadow-sm);
+  cursor: default;
+  z-index: 5;
+  line-height: 1.2;
+}
+
+.image-event__badge--top-left     { top: var(--spacing-03);    left:   var(--spacing-03);  }
+.image-event__badge--top-right    { top: var(--spacing-03);    right:  var(--spacing-03);  }
+.image-event__badge--bottom-left  { bottom: var(--spacing-03); left:   var(--spacing-03);  }
+.image-event__badge--bottom-right { bottom: var(--spacing-03); right:  var(--spacing-03);  }
+.image-event__badge--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.image-event__badge-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.image-event__badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.image-event__badge-dot--active {
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+}
+
+/* ─── Placeholder ────────────────────────────────────────────────────────────── */
+
+.image-event__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-03);
+  padding: var(--spacing-08);
+  color: var(--text-default-tertiary);
+  text-align: center;
+}
+
+.image-event__placeholder-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--text-default-tertiary);
+  opacity: 0.5;
+}
+
+.image-event__placeholder-text {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-default-secondary);
+}
+
+.image-event__placeholder-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-default-tertiary);
+}
+
+/* ─── Status bar ──────────────────────────────────────────────────────────────── */
+
+.image-event__status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-03) var(--spacing-05);
+  padding: var(--spacing-03) var(--spacing-00);
+  width: 100%;
+  margin-top: var(--spacing-03);
+}
+
+.image-event__status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-02);
+}
+
+.image-event__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color 0.3s ease;
+}
+
+.image-event__status-label {
+  font-size: 12px;
+  color: var(--text-default-secondary);
+  font-weight: 500;
+}
+
+.image-event__status-value {
+  font-size: 11px;
+  color: var(--text-default-tertiary);
+  margin-left: var(--spacing-01);
+}
