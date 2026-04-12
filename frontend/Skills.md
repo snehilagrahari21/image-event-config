@@ -4,6 +4,127 @@ This skill captures the patterns, decisions, and rules for building IOsense widg
 
 ---
 
+## ⚠️ CRITICAL RULE — Standardized Data Configuration Schema
+
+**Every widget that has any data configuration — regardless of type (chart, image, text, last data point, gauge, or any other) — MUST store data-related configuration inside a `charts` array using the schema below. This is non-negotiable.**
+
+### Required Shape
+
+```typescript
+interface WidgetConfig {
+  charts: ChartEntry[];   // always an array — even single-chart / single-value widgets
+  // ...other config keys (style, time, layout, etc.)
+}
+
+interface ChartEntry {
+  dataConfig?: DataConfig;   // REQUIRED — reserved key for IOsense data binding
+  api?: ExternalApi;        // OPTIONAL — reserved key for external source only
+  // ...other chart-level config (title, description, chartType, series, axes, etc.)
+}
+
+interface DataConfig {
+  // ── Source type (always required) ────────────────────────────────────────
+  type: 'device' | 'cluster' | 'compute';
+
+  // ── Device fields (used when type === 'device') ───────────────────────────
+  devID?:         string;   // device ID
+  devTypeID?:     string;   // device type ID
+  sensor?:        string;   // sensor / metric name
+  operator?:      string;   // Sum | Min | Max | LastDP | FirstDP | Consumption | RunHours
+
+  // ── Cluster fields (used when type === 'cluster') ─────────────────────────
+  clusterID?:     string;
+  clusterOperator ?: string;
+
+  // ── Compute fields (used when type === 'compute') ─────────────────────────
+  flowID?:        string;
+  flowParams?:    string;
+
+  // ── Shared fields (applicable across all source types) ────────────────────
+  unit?:          string;
+  dataPrecision?: number;
+}
+
+interface ExternalApi {
+  // Declare external/non-IOsense source here — free-form, but must live under `api`
+  [key: string]: any;
+}
+```
+
+### Rules
+
+- **`charts` is always an array**, even if the widget only has one data source. Single-value widgets (Last Data Point, Image, Text, etc.) use `charts` with one entry.
+- **`dataConfig` and `api` are reserved keys** inside every chart entry. Never repurpose them for other config.
+- **`dataConfig` keys listed above are reserved.** You may add extra keys alongside them for widget-specific needs, but you must never rename or reuse a reserved key for a different purpose.
+- **External sources go under `api` only.** If data comes from a URL outside the IOsense platform, declare it in `api`, not in `dataConfig`.
+- The **Data Layer Engine** resolves live values by reading `dataConfig` from the store. If your data is not in `dataConfig`, the engine cannot bind to it reactively.
+- The **Configuration panel `onChange`** must always emit a config object that conforms to this schema. Validate before calling `onChange`.
+
+### ✅ Checklist — Before Saving Any Widget Config
+
+- [ ] All data sources are stored inside `config.charts[n].dataConfig`
+- [ ] `type` field is set to `'device'`, `'cluster'`, or `'compute'`
+- [ ] Device widgets populate: `devID`, `devTypeID`, `sensor`, `operator`
+- [ ] Cluster widgets populate: `clusterID`, `operator`, `clusterOperator`
+- [ ] Compute widgets populate: `flowID`, `flowParams`
+- [ ] External API sources are declared under `config.charts[n].api`, not `dataConfig`
+- [ ] No reserved key (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator` `flowID`, `flowParams`, `devTypeID`, `unit`, `dataPrecision`) is repurposed for anything other than its defined role
+- [ ] `charts` is an array (not an object, even when there is only one chart)
+
+### Example — Single-value widget (Last Data Point)
+
+```typescript
+// ✅ Correct — single chart entry, same schema
+config = {
+  charts: [
+    {
+      dataConfig: {
+        type: 'device',
+        devID: 'dev-001',
+        devTypeID: 'dt-temp',
+        sensor: 'temperature',
+        operator: 'LastDP',
+        unit: '°C',
+        dataPrecision: 2,
+      },
+    },
+  ],
+  style: { ... },
+};
+
+// ❌ Wrong — flat config, no charts array
+config = {
+  devID: 'dev-001',
+  sensor: 'temperature',
+};
+```
+
+### Example — Widget with external source
+
+```typescript
+// ✅ External data declared under api, not mixed into dataConfig
+config = {
+  charts: [
+    {
+      dataConfig: {
+        type: 'device',
+        devID: 'dev-002',
+        sensor: 'pressure',
+        operator: 'LastDP',
+        unit: 'bar',
+      },
+      api: {
+        url: 'https://external.service.io/threshold',
+        method: 'GET',
+        // could be different as well based on API configured with widget
+      },
+    },
+  ],
+};
+```
+
+---
+
 ## ⚠️ ABSOLUTE RULE — No Custom Components
 
 **Every single UI element must come from `@faclon-labs/design-sdk`.** This is non-negotiable.
