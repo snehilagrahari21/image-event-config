@@ -24,7 +24,7 @@ interface ChartEntry {
 
 interface DataConfig {
   // ── Source type (always required) ────────────────────────────────────────
-  type: 'device' | 'cluster' | 'compute';
+  type: 'device' | 'cluster' | 'compute' | 'customExpression';
 
   // ── Device fields (used when type === 'device') ───────────────────────────
   devID?:         string;   // device ID
@@ -40,6 +40,9 @@ interface DataConfig {
   flowID?:        string;
   flowParams?:    string;
 
+  // ── Custom expression fields (used when type === 'customExpression') ─────
+  bindings?:      string;
+
   // ── Shared fields (applicable across all source types) ────────────────────
   unit?:          string;
   dataPrecision?: number;
@@ -54,9 +57,10 @@ interface ExternalApi {
 ### Rules
 
 - **`charts` is always an array**, even if the widget only has one data source. Single-value widgets (Last Data Point, Image, Text, etc.) use `charts` with one entry.
-- **`config.charts[n].dataConfig` is the only valid home for IOsense source binding.** Never store `devID`, `devTypeID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `unit`, or `dataPrecision` at the top level of `config` or directly on `series`.
+- **`config.charts[n].dataConfig` is the only valid home for IOsense source binding.** Never store `devID`, `devTypeID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `bindings`, `unit`, or `dataPrecision` at the top level of `config` or directly on `series`.
 - **`dataConfig` and `api` are reserved keys** inside every chart entry. Never repurpose them for other config.
 - **`dataConfig` keys listed above are reserved.** You may add extra keys alongside them for widget-specific needs, but you must never rename or reuse a reserved key for a different purpose.
+- For `type: 'customExpression'`, only `bindings` is required from the source-specific fields. Do not require `devID`, `clusterID`, or `flowID` in this mode.
 - **External sources go under `api` only.** If data comes from a URL outside the IOsense platform, declare it in `api`, not in `dataConfig`.
 - The **Data Layer Engine** resolves live values by reading `dataConfig` from the store. If your data is not in `dataConfig`, the engine cannot bind to it reactively.
 - The **Configuration panel `onChange`** must always emit a config object that conforms to this schema. Validate before calling `onChange`.
@@ -104,12 +108,13 @@ config = {
 ### ✅ Checklist — Before Saving Any Widget Config
 
 - [ ] All data sources are stored inside `config.charts[n].dataConfig`
-- [ ] `type` field is set to `'device'`, `'cluster'`, or `'compute'`
+- [ ] `type` field is set to `'device'`, `'cluster'`, `'compute'`, or `'customExpression'`
 - [ ] Device widgets populate: `devID`, `devTypeID`, `sensor`, `operator`
 - [ ] Cluster widgets populate: `clusterID`, `operator`, `clusterOperator` (`operator` = time/value aggregation, `clusterOperator` = cluster aggregation logic)
 - [ ] Compute widgets populate: `flowID`, `flowParams`
+- [ ] Custom expression widgets populate: `bindings`
 - [ ] External API sources are declared under `config.charts[n].api`, not `dataConfig`
-- [ ] No reserved key (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator` `flowID`, `flowParams`, `devTypeID`, `unit`, `dataPrecision`) is repurposed for anything other than its defined role
+- [ ] No reserved key (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `bindings`, `devTypeID`, `unit`, `dataPrecision`) is repurposed for anything other than its defined role
 - [ ] `charts` is an array (not an object, even when there is only one chart)
 
 ### Example — Single-value widget (Last Data Point)
@@ -241,7 +246,10 @@ src/
 // Widget
 interface WidgetProps {
   config: WidgetConfig;       // undefined on first mount — always use config?.field ?? fallback
+  data?: unknown;             // reserved runtime prop — widget display data comes from here when provided
   authentication: string;     // JWT — use directly in prod, fallback to localStorage in dev
+  timeChange?: (payload: { startTime: number | string; endTime: number | string }) => void;
+  chartChange?: (payload: { activeIndex: number }) => void;
 }
 
 // Configuration panel
@@ -253,6 +261,14 @@ interface ConfigurationProps {
 ```
 
 **Config is a round-trip.** Config panel reads → user edits → `onChange(updated)` → widget re-renders.
+
+**Reserved widget runtime keys:** `data`, `timeChange`, and `chartChange` are reserved widget prop keys. Never reuse these names for config fields or unrelated props.
+
+**Runtime data rule:** If the host passes widget display data through `data`, the widget must read from that prop instead of inventing a parallel config-based payload store. `config` is persisted configuration; `data` is runtime display input.
+
+**Widget event rule:** Emit widget interactions through the reserved callbacks only:
+- `timeChange({ startTime, endTime })`
+- `chartChange({ activeIndex })`
 
 **CRITICAL — always sync config into local state via `useEffect`:**
 ```typescript
@@ -345,6 +361,7 @@ Each chart entry in the list shows:
 - Delete button for that chart
 
 **Active chart selector:** When 2+ charts exist, the widget's Row 1 title converts to a `SelectInput` dropdown to switch the active chart. This dropdown controls which chart series are assigned to — it does NOT appear inside the accordion itself.
+When the active chart changes in the widget, emit `chartChange({ activeIndex })`.
 
 **Chart-type-aware fields:** Some fields are only relevant for specific chart types. Before adding any field to the config, ask: *does this chart type use this feature?*
 
@@ -365,7 +382,7 @@ All fields `flex-column`, 100% width.
 
 Fields per chart entry:
 1. **Label** — TextInput
-2. **Source Type** — RadioGroup (device / cluster / compute), `d-flex flex-row`
+2. **Source Type** — RadioGroup (device / cluster / compute / customExpression), `d-flex flex-row`
 
    Store these source fields in `activeChart.dataConfig`, not on `config`, not on `series`, and not in any parallel structure. If the widget also has render series, those series define presentation only and must read from the chart's `dataConfig`.
 
@@ -383,6 +400,11 @@ Fields per chart entry:
    - TextInput for Flow ID
    - TextInput for Flow Parameters
 
+   **Custom expression source:**
+   - Bindings editor/input only
+   - Store expression bindings in `activeChart.dataConfig.bindings`
+   - Do not require device, cluster, or compute fields when this source type is selected
+
 3. **Chart Type** — SelectInput: Bar / Line
 4. **Data Precision** — TextInput (number)
 5. **Color** — TextInput with color swatch suffix (square box; clicking opens ColorPicker from design-sdk)
@@ -392,7 +414,7 @@ Fields per chart entry:
 **Source-vs-render rule:**
 - `dataConfig` answers where the data comes from
 - `series` answers how the data is rendered
-- Reserved source keys (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `devTypeID`, `unit`, `dataPrecision`) must never be duplicated under `series`
+- Reserved source keys (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `bindings`, `devTypeID`, `unit`, `dataPrecision`) must never be duplicated under `series`
 
 **Add Series button** — right-aligned. Disabled until at least one chart exists.
 
@@ -547,6 +569,7 @@ When enabled in Settings dropdown:
 - Re-call `getWidgetData` with that range and the next finer periodicity (weekly→daily, daily→hourly)
 - Show breadcrumb beside chart title: e.g. `Weekly → Daily  [refresh icon]`
 - Refresh icon resets to original DatePicker selection + selected periodicity
+- Whenever the widget changes the active time window, emit `timeChange({ startTime, endTime })`
 
 Click handler must be wired to Highcharts `xAxis.labels.events.click` or `plotOptions.series.point.events.click`.
 
@@ -586,7 +609,7 @@ Click handler must be wired to Highcharts `xAxis.labels.events.click` or `plotOp
 | Sensor/operator/type select | `SelectInput` |
 | Multi-series assignment | `MultiSelectInput` |
 | Toggle (legend, drilldown) | `Switch` |
-| Source type (device/cluster/compute) | `RadioGroup` + `Radio` |
+| Source type (device/cluster/compute/customExpression) | `RadioGroup` + `Radio` |
 | Color input | `TextInput` with color swatch in suffix slot |
 | Color picker popup | `ColorPicker` |
 | Date selection | `DatePicker` |
