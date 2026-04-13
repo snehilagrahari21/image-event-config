@@ -17,7 +17,7 @@ interface WidgetConfig {
 }
 
 interface ChartEntry {
-  dataConfig?: DataConfig;   // REQUIRED — reserved key for IOsense data binding
+  dataConfig: DataConfig;    // REQUIRED — reserved key for IOsense data binding
   api?: ExternalApi;        // OPTIONAL — reserved key for external source only
   // ...other chart-level config (title, description, chartType, series, axes, etc.)
 }
@@ -54,18 +54,59 @@ interface ExternalApi {
 ### Rules
 
 - **`charts` is always an array**, even if the widget only has one data source. Single-value widgets (Last Data Point, Image, Text, etc.) use `charts` with one entry.
+- **`config.charts[n].dataConfig` is the only valid home for IOsense source binding.** Never store `devID`, `devTypeID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `unit`, or `dataPrecision` at the top level of `config` or directly on `series`.
 - **`dataConfig` and `api` are reserved keys** inside every chart entry. Never repurpose them for other config.
 - **`dataConfig` keys listed above are reserved.** You may add extra keys alongside them for widget-specific needs, but you must never rename or reuse a reserved key for a different purpose.
 - **External sources go under `api` only.** If data comes from a URL outside the IOsense platform, declare it in `api`, not in `dataConfig`.
 - The **Data Layer Engine** resolves live values by reading `dataConfig` from the store. If your data is not in `dataConfig`, the engine cannot bind to it reactively.
 - The **Configuration panel `onChange`** must always emit a config object that conforms to this schema. Validate before calling `onChange`.
 
+### Legacy Shapes To Reject
+
+```typescript
+// ❌ Wrong — flat config keys
+config = {
+  devID: 'dev-001',
+  sensor: 'temperature',
+  operator: 'LastDP',
+};
+
+// ❌ Wrong — source binding stored on series
+config = {
+  charts: [
+    {
+      series: [
+        {
+          label: 'Temperature',
+          devID: 'dev-001',
+          sensor: 'temperature',
+        },
+      ],
+    },
+  ],
+};
+
+// ✅ Right — source binding lives under charts[n].dataConfig
+config = {
+  charts: [
+    {
+      dataConfig: {
+        type: 'device',
+        devID: 'dev-001',
+        sensor: 'temperature',
+        operator: 'LastDP',
+      },
+    },
+  ],
+};
+```
+
 ### ✅ Checklist — Before Saving Any Widget Config
 
 - [ ] All data sources are stored inside `config.charts[n].dataConfig`
 - [ ] `type` field is set to `'device'`, `'cluster'`, or `'compute'`
 - [ ] Device widgets populate: `devID`, `devTypeID`, `sensor`, `operator`
-- [ ] Cluster widgets populate: `clusterID`, `operator`, `clusterOperator`
+- [ ] Cluster widgets populate: `clusterID`, `operator`, `clusterOperator` (`operator` = time/value aggregation, `clusterOperator` = cluster aggregation logic)
 - [ ] Compute widgets populate: `flowID`, `flowParams`
 - [ ] External API sources are declared under `config.charts[n].api`, not `dataConfig`
 - [ ] No reserved key (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator` `flowID`, `flowParams`, `devTypeID`, `unit`, `dataPrecision`) is repurposed for anything other than its defined role
@@ -216,11 +257,11 @@ interface ConfigurationProps {
 **CRITICAL — always sync config into local state via `useEffect`:**
 ```typescript
 // CORRECT
-const [series, setSeries] = useState(config?.series ?? []);
-useEffect(() => { setSeries(config?.series ?? []); }, [config]);
+const [charts, setCharts] = useState(config?.charts ?? []);
+useEffect(() => { setCharts(config?.charts ?? []); }, [config]);
 
-// WRONG — breaks in Lens (update() won't re-render derived values)
-const series = config?.series ?? [];
+// WRONG — derived local state is not kept in sync with config updates
+const [charts, setCharts] = useState(config?.charts ?? []);
 ```
 
 **Auth pattern (works in both dev and prod, zero changes):**
@@ -322,9 +363,11 @@ Each chart entry in the list shows:
 
 All fields `flex-column`, 100% width.
 
-Fields per series:
+Fields per chart entry:
 1. **Label** — TextInput
 2. **Source Type** — RadioGroup (device / cluster / compute), `d-flex flex-row`
+
+   Store these source fields in `activeChart.dataConfig`, not on `config`, not on `series`, and not in any parallel structure. If the widget also has render series, those series define presentation only and must read from the chart's `dataConfig`.
 
    **Device source:**
    - AutocompleteInput for device — **on every input change**, call `findUserDevices` with `search: { all: [inputValue] }`. Do not use a static list. Wire `onInputChange` to trigger the API call (debounce 300ms). Populate dropdown options from `response.data.data` (note: double `.data`).
@@ -345,6 +388,11 @@ Fields per series:
 5. **Color** — TextInput with color swatch suffix (square box; clicking opens ColorPicker from design-sdk)
 6. **Unit** — TextInput
 7. **Downsampling** — TextInput (number, in seconds)
+
+**Source-vs-render rule:**
+- `dataConfig` answers where the data comes from
+- `series` answers how the data is rendered
+- Reserved source keys (`devID`, `sensor`, `operator`, `clusterID`, `clusterOperator`, `flowID`, `flowParams`, `devTypeID`, `unit`, `dataPrecision`) must never be duplicated under `series`
 
 **Add Series button** — right-aligned. Disabled until at least one chart exists.
 
