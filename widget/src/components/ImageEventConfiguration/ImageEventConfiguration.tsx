@@ -12,13 +12,16 @@ import {
   Radio,
   RadioGroup,
   SelectInput,
-  Spinner,
   Switch,
   TabItem,
   Tabs,
   TextInput,
   UploadCta,
 } from '@faclon-labs/design-sdk';
+import {
+  makeDefaultChartEntry,
+  normalizeCharts,
+} from '../../iosense-sdk/config';
 import { findUserDevices } from '../../iosense-sdk/api';
 import type {
   BadgePosition,
@@ -43,6 +46,15 @@ const OPERATORS: { value: EventOperator; label: string }[] = [
   { value: 'Sum',         label: 'Sum' },
   { value: 'Consumption', label: 'Consumption' },
   { value: 'FirstDP',     label: 'First Data Point' },
+];
+
+const CLUSTER_OPERATORS = [
+  { value: 'Sum', label: 'Sum' },
+  { value: 'Mean', label: 'Mean' },
+  { value: 'Max', label: 'Max' },
+  { value: 'Min', label: 'Min' },
+  { value: 'Median', label: 'Median' },
+  { value: 'Mode', label: 'Mode' },
 ];
 
 const COMPARISON_OPS: { value: ComparisonOp; label: string }[] = [
@@ -80,24 +92,6 @@ const POLL_INTERVAL_OPTIONS = [
 
 function genId(): string {
   return `ev_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-}
-
-// ─── Default event ─────────────────────────────────────────────────────────────
-
-function makeDefaultEvent(): EventCondition {
-  return {
-    id: genId(),
-    label: 'New Event',
-    sourceType: 'device',
-    operator: 'LastDP',
-    comparisonType: 'fixed',
-    comparisonOp: 'gt',
-    fixedValue: 0,
-    activeColor: '#22c55e',
-    inactiveColor: '#ef4444',
-    showBadge: true,
-    badgePosition: 'top-right',
-  };
 }
 
 // ─── ColorInput helper ────────────────────────────────────────────────────────
@@ -152,11 +146,8 @@ function ColorInput({ label, value, onChange }: ColorInputProps) {
 // ─── Device picker sub-form ───────────────────────────────────────────────────
 
 interface DevicePickerProps {
-  authentication: string;
-  devID: string;
   devName: string;
-  sensorId: string;
-  sensorName: string;
+  sensor: string;
   operator: EventOperator;
   sensors: DeviceSensor[];
   onDeviceSearch: (q: string) => void;
@@ -169,7 +160,7 @@ interface DevicePickerProps {
 
 function DevicePicker({
   devName,
-  sensorId,
+  sensor,
   operator,
   sensors,
   onDeviceSearch,
@@ -212,7 +203,7 @@ function DevicePicker({
       {/* Sensor */}
       <SelectInput
         label="Sensor"
-        value={sensorId}
+        value={sensor}
       >
         <DropdownMenu>
           {sensors.length === 0 ? (
@@ -225,7 +216,7 @@ function DevicePicker({
                   contentType="Item"
                   title={s.sensorName}
                   description={s.sensorId}
-                  isSelected={s.sensorId === sensorId}
+                  isSelected={s.sensorId === sensor}
                   onClick={() => onSensorSelect(s.sensorId, s.sensorName)}
                 />
               ))}
@@ -268,21 +259,35 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
   const [deviceLoading, setDeviceLoading] = useState(false);
   const [sensors, setSensors] = useState<DeviceSensor[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dataConfig = event.dataConfig;
 
   // Reload sensors when devID changes
   useEffect(() => {
-    if (event.sourceType === 'device' && event.devID) {
+    if (dataConfig.type === 'device' && dataConfig.devID) {
       // Sensors come with findUserDevices result, keep them from last selection
     }
-  }, [event.devID, event.sourceType]);
+  }, [dataConfig.devID, dataConfig.type]);
 
   const patch = useCallback(
     (partial: Partial<EventCondition>) => onChange({ ...event, ...partial }),
     [event, onChange]
   );
 
+  const patchDataConfig = useCallback(
+    (partial: Partial<EventCondition['dataConfig']>) =>
+      onChange({
+        ...event,
+        dataConfig: {
+          ...event.dataConfig,
+          ...partial,
+        },
+      }),
+    [event, onChange]
+  );
+
   function handleDeviceSearch(q: string) {
-    patch({ devName: q, devID: '', sensorId: '', sensorName: '' });
+    patch({ devName: q, sensorName: '' });
+    patchDataConfig({ devID: '', devTypeID: '', sensor: '' });
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setDeviceLoading(true);
@@ -300,10 +305,13 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
   function handleDeviceSelect(device: Device) {
     setSensors(device.sensors ?? []);
     patch({
-      devID: device.devID,
       devName: device.devName,
-      sensorId: '',
       sensorName: '',
+    });
+    patchDataConfig({
+      devID: device.devID,
+      devTypeID: device.devTypeID,
+      sensor: '',
     });
   }
 
@@ -332,8 +340,20 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
       {/* Source type */}
       <RadioGroup
         name={`source-type-${event.id}`}
-        value={event.sourceType}
-        onChange={(v: string) => patch({ sourceType: v as SourceType })}
+        value={dataConfig.type}
+        onChange={(v: string) =>
+          patchDataConfig({
+            type: v as SourceType,
+            devID: undefined,
+            devTypeID: undefined,
+            sensor: undefined,
+            clusterID: undefined,
+            clusterOperator: undefined,
+            flowID: undefined,
+            flowParams: undefined,
+            operator: 'LastDP',
+          })
+        }
         orientation="Horizontal"
       >
         <Radio label="Device" value="device" />
@@ -342,34 +362,34 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
       </RadioGroup>
 
       {/* Source-specific fields */}
-      {event.sourceType === 'device' && (
+      {dataConfig.type === 'device' && (
         <DevicePicker
-          authentication={authentication}
-          devID={event.devID ?? ''}
           devName={event.devName ?? ''}
-          sensorId={event.sensorId ?? ''}
-          sensorName={event.sensorName ?? ''}
-          operator={event.operator}
+          sensor={dataConfig.sensor ?? ''}
+          operator={dataConfig.operator ?? 'LastDP'}
           sensors={sensors}
           onDeviceSearch={handleDeviceSearch}
           deviceOptions={deviceOptions}
           deviceLoading={deviceLoading}
           onDeviceSelect={handleDeviceSelect}
-          onSensorSelect={(id, name) => patch({ sensorId: id, sensorName: name })}
-          onOperatorSelect={(op) => patch({ operator: op })}
+          onSensorSelect={(id, name) => {
+            patch({ sensorName: name });
+            patchDataConfig({ sensor: id });
+          }}
+          onOperatorSelect={(op) => patchDataConfig({ operator: op })}
         />
       )}
 
-      {event.sourceType === 'cluster' && (
+      {dataConfig.type === 'cluster' && (
         <div className="ie-config__field-col">
           <TextInput
             label="Cluster ID"
-            value={event.clusterID ?? ''}
+            value={dataConfig.clusterID ?? ''}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              patch({ clusterID: e.target.value })
+              patchDataConfig({ clusterID: e.target.value })
             }
           />
-          <SelectInput label="Operator" value={event.operator}>
+          <SelectInput label="Operator" value={dataConfig.operator ?? 'LastDP'}>
             <DropdownMenu>
               <ActionListItemGroup>
                 {OPERATORS.map((op) => (
@@ -377,8 +397,26 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
                     key={op.value}
                     contentType="Item"
                     title={op.label}
-                    isSelected={op.value === event.operator}
-                    onClick={() => patch({ operator: op.value })}
+                    isSelected={op.value === (dataConfig.operator ?? 'LastDP')}
+                    onClick={() => patchDataConfig({ operator: op.value })}
+                  />
+                ))}
+              </ActionListItemGroup>
+            </DropdownMenu>
+          </SelectInput>
+          <SelectInput
+            label="Cluster Operator"
+            value={dataConfig.clusterOperator ?? 'Sum'}
+          >
+            <DropdownMenu>
+              <ActionListItemGroup>
+                {CLUSTER_OPERATORS.map((op) => (
+                  <ActionListItem
+                    key={op.value}
+                    contentType="Item"
+                    title={op.label}
+                    isSelected={op.value === (dataConfig.clusterOperator ?? 'Sum')}
+                    onClick={() => patchDataConfig({ clusterOperator: op.value })}
                   />
                 ))}
               </ActionListItemGroup>
@@ -387,23 +425,23 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
         </div>
       )}
 
-      {event.sourceType === 'compute' && (
+      {dataConfig.type === 'compute' && (
         <div className="ie-config__field-col">
           <TextInput
             label="Flow ID"
-            value={event.flowId ?? ''}
+            value={dataConfig.flowID ?? ''}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              patch({ flowId: e.target.value })
+              patchDataConfig({ flowID: e.target.value })
             }
           />
           <TextInput
             label="Flow Parameters (JSON)"
-            value={event.flowParams ?? ''}
+            value={dataConfig.flowParams ?? ''}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              patch({ flowParams: e.target.value })
+              patchDataConfig({ flowParams: e.target.value })
             }
           />
-          <SelectInput label="Operator" value={event.operator}>
+          <SelectInput label="Operator" value={dataConfig.operator ?? 'LastDP'}>
             <DropdownMenu>
               <ActionListItemGroup>
                 {OPERATORS.map((op) => (
@@ -411,8 +449,8 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
                     key={op.value}
                     contentType="Item"
                     title={op.label}
-                    isSelected={op.value === event.operator}
-                    onClick={() => patch({ operator: op.value })}
+                    isSelected={op.value === (dataConfig.operator ?? 'LastDP')}
+                    onClick={() => patchDataConfig({ operator: op.value })}
                   />
                 ))}
               </ActionListItemGroup>
@@ -552,6 +590,8 @@ export function ImageEventConfiguration({
   authentication,
   onChange,
 }: ConfigurationProps) {
+  const normalizedCharts = normalizeCharts(config);
+
   // ── Sync config into local state ───────────────────────────────────────────
   const [imageData, setImageData]               = useState(config?.imageData ?? '');
   const [imageName, setImageName]               = useState(config?.imageName ?? '');
@@ -561,7 +601,7 @@ export function ImageEventConfiguration({
   const [imageHeight, setImageHeight]           = useState(String(config?.imageHeight ?? config?.imageNaturalHeight ?? ''));
   const [lockAspect, setLockAspect]             = useState(true);
   const [imageFit, setImageFit]                 = useState<ImageFit>(config?.imageFit ?? 'contain');
-  const [events, setEvents]                     = useState<EventCondition[]>(config?.events ?? []);
+  const [charts, setCharts]                     = useState<EventCondition[]>(normalizedCharts);
   const [pollInterval, setPollInterval]         = useState(String(config?.pollIntervalSeconds ?? 30));
   const [wrapInCard, setWrapInCard]             = useState(config?.wrapInCard ?? false);
   const [cardBgColor, setCardBgColor]           = useState(config?.cardBgColor ?? '#ffffff');
@@ -580,7 +620,7 @@ export function ImageEventConfiguration({
     setImageWidth(String(config?.imageWidth ?? config?.imageNaturalWidth ?? ''));
     setImageHeight(String(config?.imageHeight ?? config?.imageNaturalHeight ?? ''));
     setImageFit(config?.imageFit ?? 'contain');
-    setEvents(config?.events ?? []);
+    setCharts(normalizeCharts(config));
     setPollInterval(String(config?.pollIntervalSeconds ?? 30));
     setWrapInCard(config?.wrapInCard ?? false);
     setCardBgColor(config?.cardBgColor ?? '#ffffff');
@@ -591,36 +631,53 @@ export function ImageEventConfiguration({
     setImageBorderRadius(String(config?.imageBorderRadius ?? 0));
   }, [config]);
 
+  const buildConfig = useCallback(
+    (overrides: Partial<ImageEventConfig> = {}): ImageEventConfig => ({
+      ...(config ?? {}),
+      imageData,
+      imageName,
+      imageNaturalWidth: naturalWidth,
+      imageNaturalHeight: naturalHeight,
+      imageWidth: imageWidth ? parseInt(imageWidth, 10) : undefined,
+      imageHeight: imageHeight ? parseInt(imageHeight, 10) : undefined,
+      imageFit,
+      charts,
+      events: undefined,
+      pollIntervalSeconds: parseInt(pollInterval, 10) || 30,
+      wrapInCard,
+      cardBgColor,
+      cardBorderColor,
+      cardBorderWidth: parseInt(cardBorderWidth, 10) || 0,
+      cardBorderRadius: parseInt(cardBorderRadius, 10) || 0,
+      cardPadding: parseInt(cardPadding, 10) || 0,
+      imageBorderRadius: parseInt(imageBorderRadius, 10) || 0,
+      ...overrides,
+    }),
+    [
+      cardBgColor,
+      cardBorderColor,
+      cardBorderRadius,
+      cardBorderWidth,
+      cardPadding,
+      charts,
+      config,
+      imageBorderRadius,
+      imageData,
+      imageFit,
+      imageHeight,
+      imageName,
+      imageWidth,
+      naturalHeight,
+      naturalWidth,
+      pollInterval,
+      wrapInCard,
+    ]
+  );
+
   // ── Emit on every state change ─────────────────────────────────────────────
   const emit = useCallback(
-    (overrides: Partial<ImageEventConfig> = {}) => {
-      onChange({
-        imageData,
-        imageName,
-        imageNaturalWidth: naturalWidth,
-        imageNaturalHeight: naturalHeight,
-        imageWidth: imageWidth ? parseInt(imageWidth, 10) : undefined,
-        imageHeight: imageHeight ? parseInt(imageHeight, 10) : undefined,
-        imageFit,
-        events,
-        pollIntervalSeconds: parseInt(pollInterval, 10) || 30,
-        wrapInCard,
-        cardBgColor,
-        cardBorderColor,
-        cardBorderWidth: parseInt(cardBorderWidth, 10) || 0,
-        cardBorderRadius: parseInt(cardBorderRadius, 10) || 0,
-        cardPadding: parseInt(cardPadding, 10) || 0,
-        imageBorderRadius: parseInt(imageBorderRadius, 10) || 0,
-        ...overrides,
-      });
-    },
-    [
-      imageData, imageName, naturalWidth, naturalHeight,
-      imageWidth, imageHeight, imageFit,
-      events, pollInterval,
-      wrapInCard, cardBgColor, cardBorderColor,
-      cardBorderWidth, cardBorderRadius, cardPadding, imageBorderRadius,
-    ]
+    (overrides: Partial<ImageEventConfig> = {}) => onChange(buildConfig(overrides)),
+    [buildConfig, onChange]
   );
 
   // ── Image upload ───────────────────────────────────────────────────────────
@@ -641,25 +698,14 @@ export function ImageEventConfiguration({
         setNaturalHeight(nh);
         setImageWidth(String(nw));
         setImageHeight(String(nh));
-        onChange({
-          ...(config ?? {}),
+        onChange(buildConfig({
           imageData: dataUrl,
           imageName: file.name,
           imageNaturalWidth: nw,
           imageNaturalHeight: nh,
           imageWidth: nw,
           imageHeight: nh,
-          imageFit,
-          events,
-          pollIntervalSeconds: parseInt(pollInterval, 10) || 30,
-          wrapInCard,
-          cardBgColor,
-          cardBorderColor,
-          cardBorderWidth: parseInt(cardBorderWidth, 10) || 0,
-          cardBorderRadius: parseInt(cardBorderRadius, 10) || 0,
-          cardPadding: parseInt(cardPadding, 10) || 0,
-          imageBorderRadius: parseInt(imageBorderRadius, 10) || 0,
-        });
+        }));
       };
       img.src = dataUrl;
     };
@@ -702,21 +748,21 @@ export function ImageEventConfiguration({
 
   // ── Events ─────────────────────────────────────────────────────────────────
   function addEvent() {
-    const updated = [...events, makeDefaultEvent()];
-    setEvents(updated);
-    emit({ events: updated });
+    const updated = [...charts, makeDefaultChartEntry(genId())];
+    setCharts(updated);
+    emit({ charts: updated });
   }
 
   function updateEvent(index: number, updated: EventCondition) {
-    const next = events.map((e, i) => (i === index ? updated : e));
-    setEvents(next);
-    emit({ events: next });
+    const next = charts.map((entry, i) => (i === index ? updated : entry));
+    setCharts(next);
+    emit({ charts: next });
   }
 
   function deleteEvent(index: number) {
-    const next = events.filter((_, i) => i !== index);
-    setEvents(next);
-    emit({ events: next });
+    const next = charts.filter((_, i) => i !== index);
+    setCharts(next);
+    emit({ charts: next });
   }
 
   // ─── Tabs ──────────────────────────────────────────────────────────────────
@@ -865,13 +911,13 @@ export function ImageEventConfiguration({
           <Divider />
 
           {/* Events list */}
-          {events.length === 0 ? (
+          {charts.length === 0 ? (
             <div className="ie-config__empty-events">
               <p className="ie-config__empty-text">No event conditions configured.</p>
             </div>
           ) : (
             <Accordion mode="multiple">
-              {events.map((event, index) => (
+              {charts.map((event, index) => (
                 <AccordionItem
                   key={event.id}
                   title={event.label || `Event ${index + 1}`}

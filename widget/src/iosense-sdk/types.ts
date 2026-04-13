@@ -73,51 +73,57 @@ export type BadgePosition =
   | 'bottom-right'
   | 'center';
 
-export interface EventCondition {
-  id: string;
-  label: string;
-
-  // Source
-  sourceType: SourceType;
-
-  // Device source
-  devID?: string;
-  devName?: string;
-  sensorId?: string;
-  sensorName?: string;
-
-  // Cluster source
-  clusterID?: string;
-  clusterName?: string;
-
-  // Compute source
-  flowId?: string;
-  flowParams?: string;
-
-  // Operator applied to fetched data
-  operator: EventOperator;
-
-  // Comparison — "fixed" uses comparisonOp + fixedValue; "range" uses minValue + maxValue
-  comparisonType: 'fixed' | 'range';
-  comparisonOp?: ComparisonOp;
-  fixedValue?: number;
-  minValue?: number;
-  maxValue?: number;
-
-  // Badge display
-  activeColor: string;
-  inactiveColor: string;
-  showBadge: boolean;
-  badgePosition: BadgePosition;
-}
-
 // ─── Image fit ────────────────────────────────────────────────────────────────
 
 export type ImageFit = 'contain' | 'cover' | 'fill';
 
 // ─── Widget config ────────────────────────────────────────────────────────────
 
+export interface DataConfig {
+  type: SourceType;
+  devID?: string;
+  devTypeID?: string;
+  sensor?: string;
+  operator?: EventOperator;
+  clusterID?: string;
+  clusterOperator?: string;
+  flowID?: string;
+  flowParams?: string;
+  unit?: string;
+  dataPrecision?: number;
+}
+
+export interface LegacyEventCondition {
+  id: string;
+  label: string;
+  sourceType: SourceType;
+  devID?: string;
+  devTypeID?: string;
+  devName?: string;
+  sensorId?: string;
+  sensorName?: string;
+  clusterID?: string;
+  clusterName?: string;
+  flowId?: string;
+  flowParams?: string;
+  operator: EventOperator;
+  comparisonType: 'fixed' | 'range';
+  comparisonOp?: ComparisonOp;
+  fixedValue?: number;
+  minValue?: number;
+  maxValue?: number;
+  activeColor: string;
+  inactiveColor: string;
+  showBadge: boolean;
+  badgePosition: BadgePosition;
+}
+
 export interface ImageEventConfig {
+  charts?: EventCondition[];
+
+  // Legacy field kept for backward compatibility with older saved configs.
+  events?: LegacyEventCondition[];
+
   // Image
   imageData?: string;          // base64 data URL
   imageName?: string;
@@ -126,9 +132,6 @@ export interface ImageEventConfig {
   imageWidth?: number;         // display width override (px or %)
   imageHeight?: number;        // display height override (px)
   imageFit?: ImageFit;
-
-  // Events
-  events?: EventCondition[];
   pollIntervalSeconds?: number;
 
   // Styling — card
@@ -141,4 +144,22 @@ export interface ImageEventConfig {
 
   // Styling — image
   imageBorderRadius?: number;
+}
+
+export interface EventCondition {
+  id: string;
+  label: string;
+  dataConfig: DataConfig;
+  devName?: string;
+  sensorName?: string;
+  clusterName?: string;
+  comparisonType: 'fixed' | 'range';
+  comparisonOp?: ComparisonOp;
+  fixedValue?: number;
+  minValue?: number;
+  maxValue?: number;
+  activeColor: string;
+  inactiveColor: string;
+  showBadge: boolean;
+  badgePosition: BadgePosition;
 }

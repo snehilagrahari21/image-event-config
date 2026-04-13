@@ -172,11 +172,13 @@ export async function fetchConditionValue(
   condition: EventCondition
 ): Promise<number | null> {
   try {
-    if (condition.sourceType === 'device') {
-      if (!condition.devID || !condition.sensorId) return null;
+    const dataConfig = condition.dataConfig;
 
-      if (condition.operator === 'LastDP') {
-        const dp = await getLastDP(authentication, condition.devID, condition.sensorId);
+    if (dataConfig.type === 'device') {
+      if (!dataConfig.devID || !dataConfig.sensor) return null;
+
+      if (dataConfig.operator === 'LastDP') {
+        const dp = await getLastDP(authentication, dataConfig.devID, dataConfig.sensor);
         return dp?.value ?? null;
       }
 
@@ -185,38 +187,39 @@ export async function fetchConditionValue(
       const start = now - 24 * 3_600_000;
       const points = await getDataByTimeRange(
         authentication,
-        condition.devID,
-        condition.sensorId,
+        dataConfig.devID,
+        dataConfig.sensor,
         start,
         now
       );
-      return applyOperator(points, condition.operator);
+      return applyOperator(points, dataConfig.operator ?? 'LastDP');
     }
 
-    if (condition.sourceType === 'cluster') {
+    if (dataConfig.type === 'cluster') {
       // Cluster support via getWidgetData
-      if (!condition.clusterID) return null;
+      if (!dataConfig.clusterID) return null;
       const now = Date.now();
       const start = now - 24 * 3_600_000;
       return await fetchWidgetDataValue(authentication, {
         type: 'cluster',
-        clusterID: condition.clusterID,
-        operator: mapOperatorForWidgetData(condition.operator),
+        clusterID: dataConfig.clusterID,
+        clusterOperator: dataConfig.clusterOperator,
+        operator: mapOperatorForWidgetData(dataConfig.operator ?? 'LastDP'),
         startTime: start,
         endTime: now,
       });
     }
 
-    if (condition.sourceType === 'compute') {
+    if (dataConfig.type === 'compute') {
       // Compute flow via getWidgetData
-      if (!condition.flowId) return null;
+      if (!dataConfig.flowID) return null;
       const now = Date.now();
       const start = now - 24 * 3_600_000;
       return await fetchWidgetDataValue(authentication, {
         type: 'compute',
-        flowId: condition.flowId,
-        flowParams: condition.flowParams ?? '',
-        operator: mapOperatorForWidgetData(condition.operator),
+        flowID: dataConfig.flowID,
+        flowParams: dataConfig.flowParams ?? '',
+        operator: mapOperatorForWidgetData(dataConfig.operator ?? 'LastDP'),
         startTime: start,
         endTime: now,
       });
@@ -252,7 +255,8 @@ interface WidgetDataSourceConfig {
   devID?: string;
   sensor?: string;
   clusterID?: string;
-  flowId?: string;
+  clusterOperator?: string;
+  flowID?: string;
   flowParams?: string;
   operator: string;
   startTime: number;
@@ -276,7 +280,8 @@ async function fetchWidgetDataValue(
         devID: cfg.devID,
         sensor: cfg.sensor,
         clusterID: cfg.clusterID,
-        flowId: cfg.flowId,
+        clusterOperator: cfg.clusterOperator,
+        flowID: cfg.flowID,
         flowParams: cfg.flowParams,
         operator: cfg.operator,
         key,

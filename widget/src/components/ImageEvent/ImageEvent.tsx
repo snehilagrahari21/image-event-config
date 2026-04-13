@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@faclon-labs/design-sdk';
 import { evaluateCondition, fetchConditionValue } from '../../iosense-sdk/api';
+import { normalizeCharts } from '../../iosense-sdk/config';
 import type { EventCondition, ImageEventConfig } from '../../iosense-sdk/types';
 import './ImageEvent.css';
 
@@ -27,23 +28,23 @@ const BADGE_POSITION_CLASS: Record<string, string> = {
 export function ImageEvent({ config, authentication }: WidgetProps) {
   const [conditionStates, setConditionStates] = useState<ConditionState[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const charts = useMemo(() => normalizeCharts(config), [config]);
 
-  const events = config?.events ?? [];
   const pollIntervalMs = (config?.pollIntervalSeconds ?? 30) * 1000;
 
-  // Sync condition states when events list changes
+  // Sync condition states when chart entries change
   useEffect(() => {
     setConditionStates(
-      events.map((e) => ({ id: e.id, active: false, value: null, loading: true }))
+      charts.map((chart) => ({ id: chart.id, active: false, value: null, loading: true }))
     );
-  }, [events.length]);
+  }, [charts]);
 
   // Fetch all condition values
   const fetchAll = useCallback(async () => {
-    if (events.length === 0) return;
+    if (charts.length === 0) return;
 
     const results = await Promise.all(
-      events.map(async (condition: EventCondition) => {
+      charts.map(async (condition: EventCondition) => {
         try {
           const value = await fetchConditionValue(authentication, condition);
           const active = evaluateCondition(value, condition);
@@ -54,18 +55,18 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
       })
     );
     setConditionStates(results);
-  }, [authentication, events]);
+  }, [authentication, charts]);
 
   // Initial fetch + polling
   useEffect(() => {
-    if (events.length === 0) return;
+    if (charts.length === 0) return;
 
     fetchAll();
     timerRef.current = setInterval(fetchAll, pollIntervalMs);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [fetchAll, pollIntervalMs]);
+  }, [charts.length, fetchAll, pollIntervalMs]);
 
   // Resolve display dimensions
   const imageWidth = config?.imageWidth
@@ -100,8 +101,8 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
   };
 
   const hasImage = Boolean(config?.imageData);
-  const hasEvents = events.length > 0;
-  const isAnyLoading = conditionStates.some((s) => s.loading) && hasEvents;
+  const hasCharts = charts.length > 0;
+  const isAnyLoading = conditionStates.some((s) => s.loading) && hasCharts;
 
   return (
     <div
@@ -126,8 +127,8 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
           />
 
           {/* Event badges */}
-          {hasEvents &&
-            events.map((condition: EventCondition) => {
+          {hasCharts &&
+            charts.map((condition: EventCondition) => {
               if (!condition.showBadge) return null;
               const state = conditionStates.find((s) => s.id === condition.id);
               const isActive = state?.active ?? false;
@@ -192,9 +193,9 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
       )}
 
       {/* Event status list (no-badge events shown as status row) */}
-      {hasEvents && conditionStates.length > 0 && (
+      {hasCharts && conditionStates.length > 0 && (
         <div className="image-event__status-bar">
-          {events
+          {charts
             .filter((e: EventCondition) => !e.showBadge)
             .map((condition: EventCondition) => {
               const state = conditionStates.find((s) => s.id === condition.id);
