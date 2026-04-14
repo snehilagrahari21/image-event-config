@@ -264,13 +264,18 @@ interface ConfigurationProps {
 
 **Reserved widget runtime keys:** `data`, `timeChange`, and `chartChange` are reserved widget prop keys. Never reuse these names for config fields or unrelated props.
 
-**Runtime data rule:** If the host passes widget display data through `data`, the widget must read from that prop instead of inventing a parallel config-based payload store. `config` is persisted configuration; `data` is runtime display input.
+### ⚠️ CRITICAL CLAUSE — Unidirectional Data Flow & Event Emissions
+
+To ensure proper widget-to-dashboard communication for any data updates (e.g. user triggers a time drill-down), you must strictly follow this lifecycle:
+1. **Emit Event**: The widget emits a designated event (`timeChange` or `chartChange`) when an interaction occurs. The widget NEVER modifies its own internal data payload directly.
+2. **Dashboard Fetches**: The parent dashboard captures this event, evaluates it, re-triggers the data layer, and retrieves fresh data.
+3. **Passive Prop Update**: The dashboard passes the fresh payload down to the widget via the `data` prop. The widget should simply watch for changes on `data` (e.g. via `useEffect`) and passively update its visualization.
 
 **Widget event rule:** Emit widget interactions through the reserved callbacks only:
-- `timeChange({ startTime, endTime })`
-- `chartChange({ activeIndex })`
+- `timeChange({ startTime, endTime })` — Emit when the widget requires a time window update (e.g., clicking a category for time drilldown or using an internal date picker).
+- `chartChange({ activeIndex })` — Emit when the active chart view changes within the widget.
 
-**CRITICAL — always sync config into local state via `useEffect`:**
+**CRITICAL — always sync config and data into local state via `useEffect`:**
 ```typescript
 // CORRECT
 const [charts, setCharts] = useState(config?.charts ?? []);
