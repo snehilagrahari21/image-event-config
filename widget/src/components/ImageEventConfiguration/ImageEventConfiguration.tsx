@@ -24,7 +24,6 @@ import {
 } from '../../iosense-sdk/config';
 import { findUserDevices } from '../../iosense-sdk/api';
 import type {
-  BadgePosition,
   ComparisonOp,
   Device,
   DeviceSensor,
@@ -66,14 +65,6 @@ const COMPARISON_OPS: { value: ComparisonOp; label: string }[] = [
   { value: 'lte', label: 'Less than or equal (≤)' },
 ];
 
-const BADGE_POSITIONS: { value: BadgePosition; label: string }[] = [
-  { value: 'top-left',     label: 'Top Left' },
-  { value: 'top-right',    label: 'Top Right' },
-  { value: 'bottom-left',  label: 'Bottom Left' },
-  { value: 'bottom-right', label: 'Bottom Right' },
-  { value: 'center',       label: 'Center' },
-];
-
 const IMAGE_FIT_OPTIONS: { value: ImageFit; label: string }[] = [
   { value: 'contain', label: 'Contain' },
   { value: 'cover',   label: 'Cover' },
@@ -88,13 +79,13 @@ const POLL_INTERVAL_OPTIONS = [
   { value: '300', label: 'Every 5 minutes' },
 ];
 
-// ─── Generate a simple unique ID ──────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function genId(): string {
   return `ev_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 }
 
-// ─── ColorInput helper ────────────────────────────────────────────────────────
+// ─── ColorInput helper ───────────────────────────────────────────────────────
 
 interface ColorInputProps {
   label: string;
@@ -128,7 +119,7 @@ function ColorInput({ label, value, onChange }: ColorInputProps) {
           <input
             type="color"
             value={value || '#cccccc'}
-            onChange={(e) => { onChange(e.target.value); }}
+            onChange={(e) => onChange(e.target.value)}
             className="ie-config__native-color"
           />
           <Button
@@ -143,7 +134,7 @@ function ColorInput({ label, value, onChange }: ColorInputProps) {
   );
 }
 
-// ─── Device picker sub-form ───────────────────────────────────────────────────
+// ─── Device picker sub-form ─────────────────────────────────────────────────
 
 interface DevicePickerProps {
   devName: string;
@@ -172,7 +163,6 @@ function DevicePicker({
 }: DevicePickerProps) {
   return (
     <div className="ie-config__field-col">
-      {/* Device search */}
       <AutocompleteInput
         label="Device"
         type="single"
@@ -181,7 +171,7 @@ function DevicePicker({
       >
         <DropdownMenu>
           {deviceLoading ? (
-            <ActionListItem contentType="Item" title="Searching…" isDisabled />
+            <ActionListItem contentType="Item" title="Searching..." isDisabled />
           ) : deviceOptions.length === 0 ? (
             <ActionListItem contentType="Item" title="No devices found" isDisabled />
           ) : (
@@ -200,11 +190,7 @@ function DevicePicker({
         </DropdownMenu>
       </AutocompleteInput>
 
-      {/* Sensor */}
-      <SelectInput
-        label="Sensor"
-        value={sensor}
-      >
+      <SelectInput label="Sensor" value={sensor}>
         <DropdownMenu>
           {sensors.length === 0 ? (
             <ActionListItem contentType="Item" title="Select a device first" isDisabled />
@@ -225,7 +211,6 @@ function DevicePicker({
         </DropdownMenu>
       </SelectInput>
 
-      {/* Operator */}
       <SelectInput label="Operator" value={operator}>
         <DropdownMenu>
           <ActionListItemGroup>
@@ -245,7 +230,7 @@ function DevicePicker({
   );
 }
 
-// ─── Single event form ────────────────────────────────────────────────────────
+// ─── Single event condition form ────────────────────────────────────────────
 
 interface EventFormProps {
   event: EventCondition;
@@ -261,13 +246,6 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataConfig = event.dataConfig;
 
-  // Reload sensors when devID changes
-  useEffect(() => {
-    if (dataConfig.type === 'device' && dataConfig.devID) {
-      // Sensors come with findUserDevices result, keep them from last selection
-    }
-  }, [dataConfig.devID, dataConfig.type]);
-
   const patch = useCallback(
     (partial: Partial<EventCondition>) => onChange({ ...event, ...partial }),
     [event, onChange]
@@ -277,10 +255,7 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
     (partial: Partial<EventCondition['dataConfig']>) =>
       onChange({
         ...event,
-        dataConfig: {
-          ...event.dataConfig,
-          ...partial,
-        },
+        dataConfig: { ...event.dataConfig, ...partial },
       }),
     [event, onChange]
   );
@@ -304,15 +279,27 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
 
   function handleDeviceSelect(device: Device) {
     setSensors(device.sensors ?? []);
-    patch({
-      devName: device.devName,
-      sensorName: '',
-    });
+    patch({ devName: device.devName, sensorName: '' });
     patchDataConfig({
       devID: device.devID,
       devTypeID: device.devTypeID,
       sensor: '',
     });
+  }
+
+  function handleConditionImageUpload(files: File[]) {
+    const file = files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      patch({ image: dataUrl, imageName: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveConditionImage() {
+    patch({ image: undefined, imageName: undefined });
   }
 
   return (
@@ -336,6 +323,40 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
           onClick={onDelete}
         />
       </div>
+
+      {/* Conditional image upload */}
+      <div className="ie-config__field-col">
+        <p className="ie-config__section-label">Condition Image</p>
+        {!event.image ? (
+          <UploadCta
+            bodyText="Upload image for this condition"
+            linkText="Browse files"
+            accept="image/*"
+            multiple={false}
+            onFilesSelect={handleConditionImageUpload}
+          />
+        ) : (
+          <div className="ie-config__condition-image-preview">
+            <img
+              className="ie-config__condition-image-thumb"
+              src={event.image}
+              alt={event.imageName ?? 'Condition image'}
+            />
+            <span className="ie-config__condition-image-name">
+              {event.imageName ?? 'Uploaded image'}
+            </span>
+            <Button
+              variant="Tertiary"
+              color="Negative"
+              label="Remove"
+              size="small"
+              onClick={handleRemoveConditionImage}
+            />
+          </div>
+        )}
+      </div>
+
+      <Divider />
 
       {/* Source type */}
       <RadioGroup
@@ -461,7 +482,7 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
 
       <Divider />
 
-      {/* Comparison type */}
+      {/* Comparison condition */}
       <RadioGroup
         name={`comparison-type-${event.id}`}
         value={event.comparisonType}
@@ -528,56 +549,11 @@ function EventForm({ event, authentication, onChange, onDelete }: EventFormProps
           </div>
         </div>
       )}
-
-      <Divider />
-
-      {/* Colors */}
-      <div className="ie-config__field-row">
-        <div className="ie-config__field-grow">
-          <ColorInput
-            label="Active Color"
-            value={event.activeColor}
-            onChange={(v) => patch({ activeColor: v })}
-          />
-        </div>
-        <div className="ie-config__field-grow">
-          <ColorInput
-            label="Inactive Color"
-            value={event.inactiveColor}
-            onChange={(v) => patch({ inactiveColor: v })}
-          />
-        </div>
-      </div>
-
-      {/* Badge */}
-      <Switch
-        label="Show Badge on Image"
-        isChecked={event.showBadge}
-        onChange={(checked: boolean) => patch({ showBadge: checked })}
-      />
-
-      {event.showBadge && (
-        <SelectInput label="Badge Position" value={event.badgePosition}>
-          <DropdownMenu>
-            <ActionListItemGroup>
-              {BADGE_POSITIONS.map((pos) => (
-                <ActionListItem
-                  key={pos.value}
-                  contentType="Item"
-                  title={pos.label}
-                  isSelected={event.badgePosition === pos.value}
-                  onClick={() => patch({ badgePosition: pos.value })}
-                />
-              ))}
-            </ActionListItemGroup>
-          </DropdownMenu>
-        </SelectInput>
-      )}
     </div>
   );
 }
 
-// ─── Configuration panel ──────────────────────────────────────────────────────
+// ─── Configuration panel ────────────────────────────────────────────────────
 
 interface ConfigurationProps {
   config: ImageEventConfig;
@@ -590,18 +566,16 @@ export function ImageEventConfiguration({
   authentication,
   onChange,
 }: ConfigurationProps) {
-  const normalizedCharts = normalizeCharts(config);
-
-  // ── Sync config into local state ───────────────────────────────────────────
+  // ── Sync config into local state via useEffect (Skills.md rule) ───────────
   const [imageData, setImageData]               = useState(config?.imageData ?? '');
   const [imageName, setImageName]               = useState(config?.imageName ?? '');
   const [naturalWidth, setNaturalWidth]         = useState(config?.imageNaturalWidth ?? 0);
   const [naturalHeight, setNaturalHeight]       = useState(config?.imageNaturalHeight ?? 0);
-  const [imageWidth, setImageWidth]             = useState(String(config?.imageWidth ?? config?.imageNaturalWidth ?? ''));
-  const [imageHeight, setImageHeight]           = useState(String(config?.imageHeight ?? config?.imageNaturalHeight ?? ''));
+  const [imageWidth, setImageWidth]             = useState(String(config?.imageWidth ?? ''));
+  const [imageHeight, setImageHeight]           = useState(String(config?.imageHeight ?? ''));
   const [lockAspect, setLockAspect]             = useState(true);
   const [imageFit, setImageFit]                 = useState<ImageFit>(config?.imageFit ?? 'contain');
-  const [charts, setCharts]                     = useState<EventCondition[]>(normalizedCharts);
+  const [charts, setCharts]                     = useState<EventCondition[]>(normalizeCharts(config));
   const [pollInterval, setPollInterval]         = useState(String(config?.pollIntervalSeconds ?? 30));
   const [wrapInCard, setWrapInCard]             = useState(config?.wrapInCard ?? false);
   const [cardBgColor, setCardBgColor]           = useState(config?.cardBgColor ?? '#ffffff');
@@ -617,8 +591,8 @@ export function ImageEventConfiguration({
     setImageName(config?.imageName ?? '');
     setNaturalWidth(config?.imageNaturalWidth ?? 0);
     setNaturalHeight(config?.imageNaturalHeight ?? 0);
-    setImageWidth(String(config?.imageWidth ?? config?.imageNaturalWidth ?? ''));
-    setImageHeight(String(config?.imageHeight ?? config?.imageNaturalHeight ?? ''));
+    setImageWidth(String(config?.imageWidth ?? ''));
+    setImageHeight(String(config?.imageHeight ?? ''));
     setImageFit(config?.imageFit ?? 'contain');
     setCharts(normalizeCharts(config));
     setPollInterval(String(config?.pollIntervalSeconds ?? 30));
@@ -631,6 +605,7 @@ export function ImageEventConfiguration({
     setImageBorderRadius(String(config?.imageBorderRadius ?? 0));
   }, [config]);
 
+  // ── Build config object from local state ──────────────────────────────────
   const buildConfig = useCallback(
     (overrides: Partial<ImageEventConfig> = {}): ImageEventConfig => ({
       ...(config ?? {}),
@@ -654,40 +629,26 @@ export function ImageEventConfiguration({
       ...overrides,
     }),
     [
-      cardBgColor,
-      cardBorderColor,
-      cardBorderRadius,
-      cardBorderWidth,
-      cardPadding,
-      charts,
-      config,
-      imageBorderRadius,
-      imageData,
-      imageFit,
-      imageHeight,
-      imageName,
-      imageWidth,
-      naturalHeight,
-      naturalWidth,
-      pollInterval,
-      wrapInCard,
+      cardBgColor, cardBorderColor, cardBorderRadius, cardBorderWidth,
+      cardPadding, charts, config, imageBorderRadius, imageData, imageFit,
+      imageHeight, imageName, imageWidth, naturalHeight, naturalWidth,
+      pollInterval, wrapInCard,
     ]
   );
 
-  // ── Emit on every state change ─────────────────────────────────────────────
+  // ── Emit config change to parent ──────────────────────────────────────────
   const emit = useCallback(
     (overrides: Partial<ImageEventConfig> = {}) => onChange(buildConfig(overrides)),
     [buildConfig, onChange]
   );
 
-  // ── Image upload ───────────────────────────────────────────────────────────
+  // ── Default image upload ──────────────────────────────────────────────────
   function handleFilesSelect(files: File[]) {
     const file = files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      // Read natural dimensions
       const img = new Image();
       img.onload = () => {
         const nw = img.naturalWidth;
@@ -719,7 +680,11 @@ export function ImageEventConfiguration({
     setNaturalHeight(0);
     setImageWidth('');
     setImageHeight('');
-    emit({ imageData: '', imageName: '', imageNaturalWidth: 0, imageNaturalHeight: 0, imageWidth: undefined, imageHeight: undefined });
+    emit({
+      imageData: '', imageName: '',
+      imageNaturalWidth: 0, imageNaturalHeight: 0,
+      imageWidth: undefined, imageHeight: undefined,
+    });
   }
 
   function handleWidthChange(v: string) {
@@ -746,7 +711,7 @@ export function ImageEventConfiguration({
     }
   }
 
-  // ── Events ─────────────────────────────────────────────────────────────────
+  // ── Event CRUD ────────────────────────────────────────────────────────────
   function addEvent() {
     const updated = [...charts, makeDefaultChartEntry(genId())];
     setCharts(updated);
@@ -765,71 +730,63 @@ export function ImageEventConfiguration({
     emit({ charts: next });
   }
 
-  // ─── Tabs ──────────────────────────────────────────────────────────────────
+  // ─── Render — starts directly from Tabs, no Card wrapper (Skills.md) ─────
 
   return (
     <div className="ie-config">
       <Tabs variant="Bordered" isFullWidth>
         <TabItem
-          label="Image"
+          label="Data"
           isSelected={activeTab === 0}
           onClick={() => setActiveTab(0)}
         />
         <TabItem
-          label="Events"
+          label="Style"
           isSelected={activeTab === 1}
           onClick={() => setActiveTab(1)}
         />
-        <TabItem
-          label="Style"
-          isSelected={activeTab === 2}
-          onClick={() => setActiveTab(2)}
-        />
       </Tabs>
 
-      {/* ── Tab 1: Image ── */}
+      {/* ── Tab 1: Data ── */}
       {activeTab === 0 && (
         <div className="ie-config__tab-body">
-          {/* Upload area */}
-          {!imageData ? (
-            <div className="ie-config__field-col">
-              <UploadCta
-                bodyText="Drag and drop an image here"
-                linkText="Browse files"
-                accept="image/*"
-                multiple={false}
-                onFilesSelect={handleFilesSelect}
-              />
-            </div>
-          ) : (
-            <div className="ie-config__image-preview-wrap">
-              <img
-                className="ie-config__image-preview"
-                src={imageData}
-                alt={imageName}
-              />
-              <div className="ie-config__image-meta">
-                <span className="ie-config__image-name">{imageName}</span>
-                <span className="ie-config__image-dims">
-                  {naturalWidth} × {naturalHeight} px
-                </span>
-              </div>
-              <Button
-                variant="Tertiary"
-                color="Negative"
-                label="Remove Image"
-                size="small"
-                onClick={handleRemoveImage}
-              />
-            </div>
-          )}
-
-          <Divider />
-
-          {/* Dimensions */}
-          <Accordion mode="single" defaultExpandedKeys={['dimensions']}>
-            <AccordionItem title="Image Dimensions" value="dimensions">
+          {/* Default image */}
+          <Accordion mode="single" defaultExpandedKeys={['default-image']}>
+            <AccordionItem title="Default Image" value="default-image">
               <div className="ie-config__accordion-body">
+                {!imageData ? (
+                  <UploadCta
+                    bodyText="Drag and drop a default image here"
+                    linkText="Browse files"
+                    accept="image/*"
+                    multiple={false}
+                    onFilesSelect={handleFilesSelect}
+                  />
+                ) : (
+                  <div className="ie-config__image-preview-wrap">
+                    <img
+                      className="ie-config__image-preview"
+                      src={imageData}
+                      alt={imageName}
+                    />
+                    <div className="ie-config__image-meta">
+                      <span className="ie-config__image-name">{imageName}</span>
+                      <span className="ie-config__image-dims">
+                        {naturalWidth} x {naturalHeight} px
+                      </span>
+                    </div>
+                    <Button
+                      variant="Tertiary"
+                      color="Negative"
+                      label="Remove Image"
+                      size="small"
+                      onClick={handleRemoveImage}
+                    />
+                  </div>
+                )}
+
+                <Divider />
+
                 <div className="ie-config__field-row">
                   <div className="ie-config__field-grow">
                     <TextInput
@@ -880,78 +837,81 @@ export function ImageEventConfiguration({
               </div>
             </AccordionItem>
           </Accordion>
-        </div>
-      )}
-
-      {/* ── Tab 2: Events ── */}
-      {activeTab === 1 && (
-        <div className="ie-config__tab-body">
-          {/* Poll interval */}
-          <div className="ie-config__field-col">
-            <SelectInput label="Polling Interval" value={pollInterval}>
-              <DropdownMenu>
-                <ActionListItemGroup>
-                  {POLL_INTERVAL_OPTIONS.map((o) => (
-                    <ActionListItem
-                      key={o.value}
-                      contentType="Item"
-                      title={o.label}
-                      isSelected={pollInterval === o.value}
-                      onClick={() => {
-                        setPollInterval(o.value);
-                        emit({ pollIntervalSeconds: parseInt(o.value, 10) });
-                      }}
-                    />
-                  ))}
-                </ActionListItemGroup>
-              </DropdownMenu>
-            </SelectInput>
-          </div>
 
           <Divider />
 
-          {/* Events list */}
-          {charts.length === 0 ? (
-            <div className="ie-config__empty-events">
-              <p className="ie-config__empty-text">No event conditions configured.</p>
-            </div>
-          ) : (
-            <Accordion mode="multiple">
-              {charts.map((event, index) => (
-                <AccordionItem
-                  key={event.id}
-                  title={event.label || `Event ${index + 1}`}
-                  value={event.id}
-                >
-                  <div className="ie-config__accordion-body">
-                    <EventForm
-                      event={event}
-                      authentication={authentication}
-                      onChange={(updated) => updateEvent(index, updated)}
-                      onDelete={() => deleteEvent(index)}
-                    />
-                  </div>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          )}
+          {/* Event conditions */}
+          <Accordion mode="single" defaultExpandedKeys={['events']}>
+            <AccordionItem title="Event Conditions" value="events">
+              <div className="ie-config__accordion-body">
+                {/* Poll interval */}
+                <SelectInput label="Polling Interval" value={pollInterval}>
+                  <DropdownMenu>
+                    <ActionListItemGroup>
+                      {POLL_INTERVAL_OPTIONS.map((o) => (
+                        <ActionListItem
+                          key={o.value}
+                          contentType="Item"
+                          title={o.label}
+                          isSelected={pollInterval === o.value}
+                          onClick={() => {
+                            setPollInterval(o.value);
+                            emit({ pollIntervalSeconds: parseInt(o.value, 10) });
+                          }}
+                        />
+                      ))}
+                    </ActionListItemGroup>
+                  </DropdownMenu>
+                </SelectInput>
 
-          <div className="ie-config__add-row">
-            <Button
-              variant="Secondary"
-              label="Add Event Condition"
-              size="medium"
-              onClick={addEvent}
-            />
-          </div>
+                <Divider />
+
+                {/* Events list */}
+                {charts.length === 0 ? (
+                  <div className="ie-config__empty-events">
+                    <p className="ie-config__empty-text">
+                      No event conditions configured. Add an event to show conditional images.
+                    </p>
+                  </div>
+                ) : (
+                  <Accordion mode="multiple">
+                    {charts.map((event, index) => (
+                      <AccordionItem
+                        key={event.id}
+                        title={event.label || `Event ${index + 1}`}
+                        value={event.id}
+                      >
+                        <div className="ie-config__accordion-body">
+                          <EventForm
+                            event={event}
+                            authentication={authentication}
+                            onChange={(updated) => updateEvent(index, updated)}
+                            onDelete={() => deleteEvent(index)}
+                          />
+                        </div>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+
+                <div className="ie-config__add-row">
+                  <Button
+                    variant="Secondary"
+                    label="Add Event Condition"
+                    size="medium"
+                    onClick={addEvent}
+                  />
+                </div>
+              </div>
+            </AccordionItem>
+          </Accordion>
         </div>
       )}
 
-      {/* ── Tab 3: Style ── */}
-      {activeTab === 2 && (
+      {/* ── Tab 2: Style ── */}
+      {activeTab === 1 && (
         <div className="ie-config__tab-body">
           <Accordion mode="multiple" defaultExpandedKeys={['image-style', 'card-style']}>
-            {/* Image styling */}
             <AccordionItem title="Image Styling" value="image-style">
               <div className="ie-config__accordion-body">
                 <TextInput
@@ -966,7 +926,6 @@ export function ImageEventConfiguration({
               </div>
             </AccordionItem>
 
-            {/* Card styling */}
             <AccordionItem title="Card Styling" value="card-style">
               <div className="ie-config__accordion-body">
                 <Switch

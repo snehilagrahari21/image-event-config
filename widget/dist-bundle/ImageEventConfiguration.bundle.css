@@ -1,0 +1,213 @@
+/* ─── Root container ─────────────────────────────────────────────────────────── */
+
+.ie-config {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* ─── Tab body ────────────────────────────────────────────────────────────────── */
+
+.ie-config__tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-04);
+  padding: var(--spacing-05);
+}
+
+/* ─── Accordion body (Skills.md width rule) ──────────────────────────────────── */
+
+.ie-config__accordion-body {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-04);
+}
+
+/* ─── Layout helpers ─────────────────────────────────────────────────────────── */
+
+.ie-config__field-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-04);
+  width: 100%;
+}
+
+.ie-config__field-row {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing-04);
+  width: 100%;
+  align-items: flex-start;
+}
+
+.ie-config__field-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Section label ──────────────────────────────────────────────────────────── */
+
+.ie-config__section-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-default-secondary);
+}
+
+/* ─── Default image preview ──────────────────────────────────────────────────── */
+
+.ie-config__image-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-03);
+}
+
+.ie-config__image-preview {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: var(--global-border-radius-large);
+  border: 1px solid var(--border-gray-default);
+}
+
+.ie-config__image-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-01);
+}
+
+.ie-config__image-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-default-primary);
+}
+
+.ie-config__image-dims {
+  font-size: 12px;
+  color: var(--text-default-tertiary);
+}
+
+/* ─── Condition image preview (per event) ────────────────────────────────────── */
+
+.ie-config__condition-image-preview {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-03);
+  padding: var(--spacing-02);
+  border: 1px solid var(--border-gray-default);
+  border-radius: var(--global-border-radius-medium);
+}
+
+.ie-config__condition-image-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: var(--global-border-radius-small);
+  flex-shrink: 0;
+}
+
+.ie-config__condition-image-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-default-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Event form ─────────────────────────────────────────────────────────────── */
+
+.ie-config__event-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-04);
+  width: 100%;
+}
+
+.ie-config__event-header {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--spacing-03);
+  width: 100%;
+}
+
+.ie-config__event-header .ie-config__field-grow {
+  flex: 1;
+}
+
+/* ─── Add button row ─────────────────────────────────────────────────────────── */
+
+.ie-config__add-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--spacing-03);
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────────────── */
+
+.ie-config__empty-events {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-07);
+}
+
+.ie-config__empty-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-default-tertiary);
+  text-align: center;
+}
+
+/* ─── Color input ────────────────────────────────────────────────────────────── */
+
+.ie-config__color-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.ie-config__color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border-gray-default);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  display: block;
+}
+
+.ie-config__native-color-wrap {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: var(--global-z-index-dropdown);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-03);
+  background: var(--background-default-intense);
+  border: 1px solid var(--border-gray-default);
+  border-radius: var(--global-border-radius-large);
+  padding: var(--spacing-03);
+  box-shadow: var(--fds-shadow-md);
+}
+
+.ie-config__native-color {
+  width: 48px;
+  height: 32px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--global-border-radius-medium);
+  background: transparent;
+}
+

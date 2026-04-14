@@ -60,24 +60,17 @@ export type EventOperator =
   | 'Consumption'
   | 'FirstDP';
 
-// ─── Event condition ──────────────────────────────────────────────────────────
+// ─── Source & comparison types ────────────────────────────────────────────────
 
 export type SourceType = 'device' | 'cluster' | 'compute';
 
 export type ComparisonOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
 
-export type BadgePosition =
-  | 'top-left'
-  | 'top-right'
-  | 'bottom-left'
-  | 'bottom-right'
-  | 'center';
-
 // ─── Image fit ────────────────────────────────────────────────────────────────
 
 export type ImageFit = 'contain' | 'cover' | 'fill';
 
-// ─── Widget config ────────────────────────────────────────────────────────────
+// ─── Data config (per Skills.md standardized schema) ─────────────────────────
 
 export interface DataConfig {
   type: SourceType;
@@ -92,6 +85,35 @@ export interface DataConfig {
   unit?: string;
   dataPrecision?: number;
 }
+
+// ─── Event condition — each entry in charts[] ────────────────────────────────
+// An event binds a dataConfig source to a condition + a conditional image.
+// When the fetched value satisfies the condition, the widget displays this
+// entry's image instead of the default one.
+
+export interface EventCondition {
+  id: string;
+  label: string;
+  dataConfig: DataConfig;
+
+  // Display names kept for config UI (not stored in dataConfig per Skills.md)
+  devName?: string;
+  sensorName?: string;
+  clusterName?: string;
+
+  // Condition
+  comparisonType: 'fixed' | 'range';
+  comparisonOp?: ComparisonOp;
+  fixedValue?: number;
+  minValue?: number;
+  maxValue?: number;
+
+  // Conditional image shown when the condition is active
+  image?: string;       // base64 data URL
+  imageName?: string;
+}
+
+// ─── Legacy event condition (for migration) ──────────────────────────────────
 
 export interface LegacyEventCondition {
   id: string;
@@ -115,8 +137,10 @@ export interface LegacyEventCondition {
   activeColor: string;
   inactiveColor: string;
   showBadge: boolean;
-  badgePosition: BadgePosition;
+  badgePosition: string;
 }
+
+// ─── Widget config ────────────────────────────────────────────────────────────
 
 export interface ImageEventConfig {
   charts?: EventCondition[];
@@ -124,13 +148,13 @@ export interface ImageEventConfig {
   // Legacy field kept for backward compatibility with older saved configs.
   events?: LegacyEventCondition[];
 
-  // Image
+  // Default image (shown when no condition matches)
   imageData?: string;          // base64 data URL
   imageName?: string;
   imageNaturalWidth?: number;
   imageNaturalHeight?: number;
-  imageWidth?: number;         // display width override (px or %)
-  imageHeight?: number;        // display height override (px)
+  imageWidth?: number;
+  imageHeight?: number;
   imageFit?: ImageFit;
   pollIntervalSeconds?: number;
 
@@ -144,22 +168,4 @@ export interface ImageEventConfig {
 
   // Styling — image
   imageBorderRadius?: number;
-}
-
-export interface EventCondition {
-  id: string;
-  label: string;
-  dataConfig: DataConfig;
-  devName?: string;
-  sensorName?: string;
-  clusterName?: string;
-  comparisonType: 'fixed' | 'range';
-  comparisonOp?: ComparisonOp;
-  fixedValue?: number;
-  minValue?: number;
-  maxValue?: number;
-  activeColor: string;
-  inactiveColor: string;
-  showBadge: boolean;
-  badgePosition: BadgePosition;
 }

@@ -10,38 +10,37 @@ interface WidgetProps {
   authentication: string;
 }
 
-interface ConditionState {
+interface ConditionResult {
   id: string;
   active: boolean;
   value: number | null;
   loading: boolean;
 }
 
-const BADGE_POSITION_CLASS: Record<string, string> = {
-  'top-left':     'image-event__badge--top-left',
-  'top-right':    'image-event__badge--top-right',
-  'bottom-left':  'image-event__badge--bottom-left',
-  'bottom-right': 'image-event__badge--bottom-right',
-  'center':       'image-event__badge--center',
-};
-
 export function ImageEvent({ config, authentication }: WidgetProps) {
-  const [conditionStates, setConditionStates] = useState<ConditionState[]>([]);
+  const [charts, setCharts] = useState<EventCondition[]>([]);
+  const [conditionResults, setConditionResults] = useState<ConditionResult[]>([]);
+  const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const charts = useMemo(() => normalizeCharts(config), [config]);
+
+  // Sync charts from config via useEffect (Skills.md rule)
+  useEffect(() => {
+    setCharts(normalizeCharts(config));
+  }, [config]);
 
   const pollIntervalMs = (config?.pollIntervalSeconds ?? 30) * 1000;
 
-  // Sync condition states when chart entries change
+  // Initialize condition results when charts change
   useEffect(() => {
-    setConditionStates(
-      charts.map((chart) => ({ id: chart.id, active: false, value: null, loading: true }))
+    setConditionResults(
+      charts.map((c) => ({ id: c.id, active: false, value: null, loading: true }))
     );
   }, [charts]);
 
-  // Fetch all condition values
+  // Fetch all condition values and evaluate
   const fetchAll = useCallback(async () => {
     if (charts.length === 0) return;
+    setLoading(true);
 
     const results = await Promise.all(
       charts.map(async (condition: EventCondition) => {
@@ -54,7 +53,9 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
         }
       })
     );
-    setConditionStates(results);
+
+    setConditionResults(results);
+    setLoading(false);
   }, [authentication, charts]);
 
   // Initial fetch + polling
@@ -68,89 +69,50 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
     };
   }, [charts.length, fetchAll, pollIntervalMs]);
 
-  // Resolve display dimensions
-  const imageWidth = config?.imageWidth
-    ? `${config.imageWidth}px`
-    : config?.imageNaturalWidth
-      ? `${config.imageNaturalWidth}px`
-      : '100%';
-
-  const imageHeight = config?.imageHeight
-    ? `${config.imageHeight}px`
-    : config?.imageNaturalHeight
-      ? `${config.imageNaturalHeight}px`
-      : 'auto';
+  // Determine which image to display:
+  // First matching condition's image wins, otherwise default image
+  const activeImage = useMemo(() => {
+    for (let i = 0; i < charts.length; i++) {
+      const result = conditionResults.find((r) => r.id === charts[i].id);
+      if (result?.active && charts[i].image) {
+        return { src: charts[i].image!, alt: charts[i].imageName ?? charts[i].label };
+      }
+    }
+    // Fallback to default image
+    if (config?.imageData) {
+      return { src: config.imageData, alt: config.imageName ?? 'Default image' };
+    }
+    return null;
+  }, [charts, conditionResults, config?.imageData, config?.imageName]);
 
   const imageFit = config?.imageFit ?? 'contain';
-
-  // Card / container inline overrides
-  const containerStyle: React.CSSProperties = {};
-  if (config?.wrapInCard) {
-    if (config.cardBgColor) containerStyle.backgroundColor = config.cardBgColor;
-    if (config.cardBorderColor) containerStyle.borderColor = config.cardBorderColor;
-    if (config.cardBorderWidth != null) containerStyle.borderWidth = `${config.cardBorderWidth}px`;
-    if (config.cardBorderRadius != null) containerStyle.borderRadius = `${config.cardBorderRadius}px`;
-    if (config.cardPadding != null) containerStyle.padding = `${config.cardPadding}px`;
-  }
-
-  const imageStyle: React.CSSProperties = {
-    width: imageWidth,
-    height: imageHeight,
-    objectFit: imageFit,
-    borderRadius: config?.imageBorderRadius != null ? `${config.imageBorderRadius}px` : undefined,
-  };
-
-  const hasImage = Boolean(config?.imageData);
   const hasCharts = charts.length > 0;
-  const isAnyLoading = conditionStates.some((s) => s.loading) && hasCharts;
+  const isLoading = loading && hasCharts && conditionResults.some((r) => r.loading);
 
   return (
     <div
       className={`image-event${config?.wrapInCard ? ' image-event--card' : ''}`}
-      style={containerStyle}
     >
-      {/* Loading overlay */}
-      {isAnyLoading && (
+      {/* Loading indicator */}
+      {isLoading && (
         <div className="image-event__loading-overlay">
           <Spinner size="medium" />
         </div>
       )}
 
-      {/* Image or placeholder */}
-      {hasImage ? (
+      {activeImage ? (
         <div className="image-event__image-wrap">
           <img
             className="image-event__img"
-            src={config.imageData}
-            alt={config.imageName ?? 'Event image'}
-            style={imageStyle}
+            src={activeImage.src}
+            alt={activeImage.alt}
+            style={{
+              objectFit: imageFit,
+              borderRadius: config?.imageBorderRadius != null
+                ? `${config.imageBorderRadius}px`
+                : undefined,
+            }}
           />
-
-          {/* Event badges */}
-          {hasCharts &&
-            charts.map((condition: EventCondition) => {
-              if (!condition.showBadge) return null;
-              const state = conditionStates.find((s) => s.id === condition.id);
-              const isActive = state?.active ?? false;
-              const badgeColor = isActive ? condition.activeColor : condition.inactiveColor;
-              const posClass =
-                BADGE_POSITION_CLASS[condition.badgePosition] ??
-                BADGE_POSITION_CLASS['top-right'];
-
-              return (
-                <div
-                  key={condition.id}
-                  className={`image-event__badge ${posClass}`}
-                  style={{ backgroundColor: badgeColor }}
-                  title={`${condition.label}: ${isActive ? 'Active' : 'Inactive'}${state?.value != null ? ` (${state.value})` : ''}`}
-                >
-                  <span className="image-event__badge-label">{condition.label}</span>
-                  <span
-                    className={`image-event__badge-dot${isActive ? ' image-event__badge-dot--active' : ''}`}
-                  />
-                </div>
-              );
-            })}
         </div>
       ) : (
         <div className="image-event__placeholder">
@@ -189,35 +151,6 @@ export function ImageEvent({ config, authentication }: WidgetProps) {
           <p className="image-event__placeholder-hint">
             Open the widget settings to upload an image
           </p>
-        </div>
-      )}
-
-      {/* Event status list (no-badge events shown as status row) */}
-      {hasCharts && conditionStates.length > 0 && (
-        <div className="image-event__status-bar">
-          {charts
-            .filter((e: EventCondition) => !e.showBadge)
-            .map((condition: EventCondition) => {
-              const state = conditionStates.find((s) => s.id === condition.id);
-              const isActive = state?.active ?? false;
-              const dotColor = isActive ? condition.activeColor : condition.inactiveColor;
-              return (
-                <div key={condition.id} className="image-event__status-item">
-                  <span
-                    className="image-event__status-dot"
-                    style={{ backgroundColor: dotColor }}
-                  />
-                  <span className="image-event__status-label">{condition.label}</span>
-                  {state?.value != null && (
-                    <span className="image-event__status-value">
-                      {typeof state.value === 'number'
-                        ? state.value.toFixed(2)
-                        : state.value}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
         </div>
       )}
     </div>

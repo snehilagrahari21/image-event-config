@@ -1,0 +1,84 @@
+/* ─── Container ─────────────────────────────────────────────────────────────── */
+
+.image-event {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.image-event--card {
+  background: var(--background-default-intense);
+  border: 1px solid var(--border-gray-default);
+  border-radius: var(--global-border-radius-large);
+  padding: var(--spacing-04);
+}
+
+/* ─── Loading overlay ────────────────────────────────────────────────────────── */
+
+.image-event__loading-overlay {
+  position: absolute;
+  top: var(--spacing-03);
+  right: var(--spacing-03);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ─── Image wrap ─────────────────────────────────────────────────────────────── */
+
+.image-event__image-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.image-event__img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+}
+
+/* ─── Placeholder ────────────────────────────────────────────────────────────── */
+
+.image-event__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-03);
+  padding: var(--spacing-08);
+  color: var(--text-default-tertiary);
+  text-align: center;
+}
+
+.image-event__placeholder-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--text-default-tertiary);
+  opacity: 0.5;
+}
+
+.image-event__placeholder-text {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-default-secondary);
+}
+
+.image-event__placeholder-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-default-tertiary);
+}
+

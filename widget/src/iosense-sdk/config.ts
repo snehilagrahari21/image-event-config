@@ -1,16 +1,10 @@
 import type {
-  BadgePosition,
-  ComparisonOp,
   DataConfig,
   EventCondition,
   EventOperator,
   ImageEventConfig,
   LegacyEventCondition,
 } from './types';
-
-function fallbackBadgePosition(value?: BadgePosition): BadgePosition {
-  return value ?? 'top-right';
-}
 
 function fallbackComparisonType(value?: 'fixed' | 'range'): 'fixed' | 'range' {
   return value ?? 'fixed';
@@ -35,10 +29,6 @@ export function makeDefaultChartEntry(id: string): EventCondition {
     comparisonType: 'fixed',
     comparisonOp: 'gt',
     fixedValue: 0,
-    activeColor: '#22c55e',
-    inactiveColor: '#ef4444',
-    showBadge: true,
-    badgePosition: 'top-right',
   };
 }
 
@@ -64,10 +54,6 @@ function normalizeLegacyEvent(event: LegacyEventCondition): EventCondition {
     fixedValue: event.fixedValue,
     minValue: event.minValue,
     maxValue: event.maxValue,
-    activeColor: event.activeColor,
-    inactiveColor: event.inactiveColor,
-    showBadge: event.showBadge,
-    badgePosition: fallbackBadgePosition(event.badgePosition),
   };
 }
 
@@ -84,10 +70,6 @@ function normalizeChartEntry(chart: EventCondition): EventCondition {
     comparisonType: fallbackComparisonType(chart.comparisonType),
     comparisonOp: chart.comparisonOp ?? 'gt',
     fixedValue: chart.fixedValue ?? 0,
-    activeColor: chart.activeColor ?? '#22c55e',
-    inactiveColor: chart.inactiveColor ?? '#ef4444',
-    showBadge: chart.showBadge ?? true,
-    badgePosition: fallbackBadgePosition(chart.badgePosition),
   };
 }
 
